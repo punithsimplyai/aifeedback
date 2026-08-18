@@ -1,0 +1,873 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Consultant Feedback Capture — Claim Review</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,500;8..60,600;8..60,700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<!-- MSAL.js — browser-based auth library. See SETUP_GUIDE.md if your tenant blocks external CDN scripts (self-host this file instead). -->
+<script src="https://cdn.jsdelivr.net/npm/@azure/msal-browser@3/dist/browser/msal-browser.min.js"></script>
+<style>
+  :root{
+    --ink:#16233D;
+    --slate:#3F4A5C;
+    --slate-soft:#7C879A;
+    --paper:#F5F3EC;
+    --card:#FFFFFF;
+    --line:#E3DFD3;
+    --line-soft:#EDEAE0;
+    --teal:#1F7A64;
+    --teal-soft:#E6F2EE;
+    --amber:#B5651D;
+    --amber-soft:#FBF0E1;
+    --red:#AB4131;
+    --red-soft:#FBEDE9;
+    --focus:#2A56C6;
+    --radius:10px;
+    --radius-sm:6px;
+  }
+  *{box-sizing:border-box;}
+  html{-webkit-text-size-adjust:100%;}
+  body{
+    margin:0;
+    background:var(--paper);
+    color:var(--slate);
+    font-family:'Inter',sans-serif;
+    font-size:15px;
+    line-height:1.5;
+  }
+  ::selection{ background:#CFE1DB; }
+
+  a{ color:var(--focus); }
+  h1,h2,h3{ font-family:'Source Serif 4',serif; color:var(--ink); margin:0; }
+
+  /* ---------- layout shell ---------- */
+  .page{
+    max-width:1180px;
+    margin:0 auto;
+    padding:36px 28px 100px;
+    display:grid;
+    grid-template-columns:1fr 300px;
+    gap:32px;
+    align-items:start;
+  }
+  @media (max-width:920px){
+    .page{ grid-template-columns:1fr; padding:20px 16px 100px; }
+    .summary-rail{ position:static !important; order:-1; }
+  }
+
+  /* ---------- header ---------- */
+  .masthead{
+    grid-column:1 / -1;
+    border-bottom:1px solid var(--line);
+    padding-bottom:22px;
+    margin-bottom:6px;
+    display:flex;
+    justify-content:space-between;
+    align-items:flex-end;
+    gap:24px;
+    flex-wrap:wrap;
+  }
+  .masthead .eyebrow{
+    font-family:'JetBrains Mono',monospace;
+    font-size:11.5px;
+    letter-spacing:.08em;
+    text-transform:uppercase;
+    color:var(--teal);
+    margin-bottom:8px;
+    display:block;
+  }
+  .masthead h1{ font-size:30px; font-weight:600; letter-spacing:-0.01em; }
+  .masthead p{ color:var(--slate-soft); margin-top:6px; font-size:14.5px; max-width:56ch; }
+
+  .claim-meta{
+    display:flex;
+    gap:14px;
+    flex-wrap:wrap;
+  }
+  .claim-meta label{
+    display:flex; flex-direction:column; gap:4px;
+    font-size:11.5px; color:var(--slate-soft);
+    font-family:'JetBrains Mono',monospace;
+    letter-spacing:.03em;
+    text-transform:uppercase;
+  }
+  .claim-meta input{
+    font-family:'Inter',sans-serif;
+    font-size:14px;
+    color:var(--ink);
+    border:1px solid var(--line);
+    border-radius:var(--radius-sm);
+    padding:8px 10px;
+    background:var(--card);
+    min-width:170px;
+  }
+  .claim-meta input:focus-visible{ outline:2px solid var(--focus); outline-offset:1px; }
+  .claim-meta input[readonly]{ background:var(--line-soft); color:var(--slate); cursor:not-allowed; }
+
+  /* ---------- auth bar ---------- */
+  .auth-bar{
+    grid-column:1 / -1;
+    display:flex; align-items:center; justify-content:space-between; gap:14px; flex-wrap:wrap;
+    background:var(--card); border:1px solid var(--line); border-radius:var(--radius);
+    padding:12px 18px; margin-bottom:4px; font-size:13px;
+  }
+  .auth-bar .authtext{ color:var(--slate-soft); display:flex; align-items:center; gap:8px; }
+  .auth-bar .authdot{ width:8px; height:8px; border-radius:50%; background:var(--slate-soft); flex:none; }
+  .auth-bar.signed-in .authdot{ background:var(--teal); }
+  .auth-bar.error .authdot{ background:var(--red); }
+  .auth-bar.error .authtext{ color:var(--red); }
+  .auth-bar .authtext strong{ color:var(--ink); }
+
+  /* ---------- section shells ---------- */
+  main{ display:flex; flex-direction:column; gap:22px; }
+
+  section.block{
+    background:var(--card);
+    border:1px solid var(--line);
+    border-radius:var(--radius);
+    padding:24px 26px 26px;
+  }
+  .block-head{
+    display:flex; align-items:baseline; gap:10px; margin-bottom:4px;
+  }
+  .block-index{
+    font-family:'JetBrains Mono',monospace;
+    font-size:12px; color:var(--teal); letter-spacing:.05em;
+  }
+  .block-head h2{ font-size:18px; font-weight:600; }
+  .block-sub{ color:var(--slate-soft); font-size:13.5px; margin:4px 0 18px; }
+
+  /* ---------- agent cards (section A) ---------- */
+  .agent-grid{ display:flex; flex-direction:column; gap:10px; }
+  .agent-row{
+    display:flex; align-items:center; justify-content:space-between;
+    gap:16px; flex-wrap:wrap;
+    padding:14px 16px;
+    border:1px solid var(--line-soft);
+    border-radius:var(--radius-sm);
+    background:#FCFBF8;
+    transition:border-color .15s ease, background .15s ease;
+  }
+  .agent-row[data-answered="true"]{ border-color:var(--line); background:var(--card); }
+  .agent-name{ font-weight:600; color:var(--ink); font-size:14.5px; min-width:150px; }
+
+  /* ---------- pill radio groups ---------- */
+  fieldset{ border:none; margin:0; padding:0; }
+  .pillset{ display:flex; gap:8px; flex-wrap:wrap; }
+  .pill{ position:relative; }
+  .pill input{
+    position:absolute; opacity:0; width:100%; height:100%; margin:0; cursor:pointer;
+  }
+  .pill span{
+    display:inline-flex; align-items:center; gap:6px;
+    padding:8px 14px;
+    border:1px solid var(--line);
+    border-radius:999px;
+    font-size:13.5px; font-weight:500;
+    color:var(--slate);
+    background:var(--card);
+    white-space:nowrap;
+    transition:all .13s ease;
+  }
+  .pill input:focus-visible + span{ outline:2px solid var(--focus); outline-offset:2px; }
+  .pill input:hover + span{ border-color:#C7C2B3; }
+
+  .pill.agree input:checked + span{ background:var(--teal-soft); border-color:var(--teal); color:var(--teal); }
+  .pill.partial input:checked + span{ background:var(--amber-soft); border-color:var(--amber); color:var(--amber); }
+  .pill.disagree input:checked + span{ background:var(--red-soft); border-color:var(--red); color:var(--red); }
+  .pill.yes input:checked + span{ background:var(--amber-soft); border-color:var(--amber); color:var(--amber); }
+  .pill.no input:checked + span{ background:var(--teal-soft); border-color:var(--teal); color:var(--teal); }
+  .pill.neutral input:checked + span{ background:#EEF1F6; border-color:var(--focus); color:var(--focus); }
+
+  .pill span::before{
+    content:""; width:7px; height:7px; border-radius:50%; border:1.5px solid currentColor; flex:none;
+    transition:background .12s ease;
+  }
+  .pill input:checked + span::before{ background:currentColor; }
+
+  /* ---------- yes/no question rows ---------- */
+  .qrow{
+    display:flex; align-items:center; justify-content:space-between;
+    gap:16px; flex-wrap:wrap;
+    padding:16px 0;
+    border-top:1px solid var(--line-soft);
+  }
+  .qrow:first-of-type{ border-top:none; padding-top:0; }
+  .qtext{ font-size:14.5px; color:var(--ink); font-weight:500; max-width:60ch; }
+  .qtext .hint{ display:block; font-weight:400; color:var(--slate-soft); font-size:12.5px; margin-top:2px; }
+
+  /* ---------- conditional reveal panels ---------- */
+  .reveal{
+    display:grid;
+    grid-template-rows:0fr;
+    opacity:0;
+    transition:grid-template-rows .22s ease, opacity .18s ease, margin .22s ease;
+    margin-top:0;
+  }
+  .reveal > div{ overflow:hidden; }
+  .reveal.open{ grid-template-rows:1fr; opacity:1; margin-top:14px; }
+  .reveal-inner{
+    background:#FBF9F4;
+    border:1px solid var(--line-soft);
+    border-left:3px solid var(--amber);
+    border-radius:var(--radius-sm);
+    padding:16px 18px;
+  }
+  .reveal-inner.calm{ border-left-color:var(--teal); }
+
+  label.field-label{
+    display:block; font-size:12.5px; font-weight:600; color:var(--ink);
+    margin-bottom:8px; letter-spacing:.01em;
+  }
+  textarea, .textfield{
+    width:100%;
+    font-family:'Inter',sans-serif;
+    font-size:14px;
+    color:var(--ink);
+    border:1px solid var(--line);
+    border-radius:var(--radius-sm);
+    padding:10px 12px;
+    background:var(--card);
+    resize:vertical;
+    min-height:64px;
+  }
+  textarea:focus-visible, .textfield:focus-visible{ outline:2px solid var(--focus); outline-offset:1px; }
+  textarea::placeholder, .textfield::placeholder{ color:#A6ACB8; }
+
+  .subquestion{ margin-bottom:16px; }
+  .subquestion:last-child{ margin-bottom:0; }
+  .subquestion .field-label{ margin-bottom:10px; }
+
+  /* ---------- footer / submit ---------- */
+  .submit-bar{
+    display:flex; align-items:center; justify-content:space-between; gap:16px; flex-wrap:wrap;
+    background:var(--card); border:1px solid var(--line); border-radius:var(--radius);
+    padding:20px 24px;
+  }
+  .submit-bar p{ font-size:13px; color:var(--slate-soft); margin:0; max-width:44ch; }
+  button.primary{
+    font-family:'Inter',sans-serif;
+    font-weight:600; font-size:14.5px;
+    color:#fff; background:var(--ink);
+    border:none; border-radius:999px;
+    padding:13px 26px;
+    cursor:pointer;
+    transition:background .15s ease, transform .1s ease;
+    flex:none;
+  }
+  button.primary:hover{ background:#0E1830; }
+  button.primary:active{ transform:scale(.98); }
+  button.primary:focus-visible{ outline:2px solid var(--focus); outline-offset:2px; }
+  button.primary:disabled{ background:#C6CAD2; cursor:not-allowed; }
+
+  button.ghost{
+    font-family:'Inter',sans-serif; font-weight:500; font-size:13px;
+    color:var(--slate); background:transparent; border:1px solid var(--line);
+    border-radius:999px; padding:8px 16px; cursor:pointer;
+  }
+  button.ghost:hover{ border-color:#C7C2B3; }
+
+  /* ---------- summary rail (signature element) ---------- */
+  .summary-rail{ position:sticky; top:28px; display:flex; flex-direction:column; gap:14px; }
+  .summary-card{
+    background:var(--ink); color:#fff;
+    border-radius:var(--radius);
+    padding:22px 22px 20px;
+  }
+  .summary-card .eyebrow{
+    font-family:'JetBrains Mono',monospace; font-size:11px; letter-spacing:.08em;
+    text-transform:uppercase; color:#8FA3C7; display:block; margin-bottom:10px;
+  }
+  .progress-num{ font-family:'Source Serif 4',serif; font-size:38px; font-weight:600; line-height:1; }
+  .progress-num span{ font-size:19px; color:#8896AC; font-weight:500; }
+  .progress-label{ font-size:12.5px; color:#B7C1D4; margin-top:4px; }
+  .progress-track{ height:5px; background:#2A3A5C; border-radius:4px; margin-top:14px; overflow:hidden; }
+  .progress-fill{ height:100%; background:#5FB9A0; width:0%; transition:width .25s ease; }
+
+  .status-card{
+    background:var(--card); border:1px solid var(--line); border-radius:var(--radius);
+    padding:18px 20px;
+  }
+  .status-card h3{ font-size:13px; text-transform:uppercase; letter-spacing:.06em; color:var(--slate-soft); font-weight:600; margin-bottom:12px; font-family:'Inter',sans-serif; }
+  .status-list{ list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:9px; }
+  .status-list li{ display:flex; align-items:center; justify-content:space-between; gap:10px; font-size:13px; }
+  .status-list .k{ color:var(--slate); }
+  .status-list .v{ font-weight:600; font-size:12px; padding:3px 9px; border-radius:999px; }
+  .v.pending{ background:#F0EEE7; color:var(--slate-soft); }
+  .v.ok{ background:var(--teal-soft); color:var(--teal); }
+  .v.flag{ background:var(--amber-soft); color:var(--amber); }
+
+  .note-card{
+    font-size:12.5px; color:var(--slate-soft); line-height:1.6;
+    border-top:1px solid var(--line); padding-top:14px;
+  }
+
+  /* ---------- confirmation ---------- */
+  .confirm-overlay{
+    position:fixed; inset:0; background:rgba(22,35,61,.55);
+    display:none; align-items:center; justify-content:center; padding:20px; z-index:50;
+  }
+  .confirm-overlay.open{ display:flex; }
+  .confirm-modal{
+    background:#fff; border-radius:14px; max-width:560px; width:100%;
+    padding:30px 30px 26px; max-height:82vh; overflow:auto;
+  }
+  .confirm-modal h2{ font-size:20px; margin-bottom:8px; }
+  .confirm-modal p{ color:var(--slate-soft); font-size:13.5px; margin-bottom:16px; }
+  .confirm-modal pre{
+    background:#F6F4EF; border:1px solid var(--line); border-radius:8px;
+    padding:14px; font-family:'JetBrains Mono',monospace; font-size:11.5px;
+    color:var(--ink); overflow:auto; max-height:300px; line-height:1.6;
+  }
+  .confirm-actions{ display:flex; justify-content:flex-end; gap:10px; margin-top:18px; }
+
+  @media (prefers-reduced-motion: reduce){
+    *{ transition:none !important; }
+  }
+  .sr-only{
+    position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden;
+    clip:rect(0,0,0,0); white-space:nowrap; border:0;
+  }
+</style>
+</head>
+<body>
+
+<div class="page">
+
+  <div class="masthead">
+    <div>
+      <span class="eyebrow">Post-Deployment &middot; Consultant Review</span>
+      <h1>Consultant Feedback Capture</h1>
+      <p>Structured sign-off on the agent-assisted determination for this claim. Every field here feeds the accuracy, risk, and continuous-improvement reporting.</p>
+    </div>
+    <div class="claim-meta">
+      <label>Claim ID
+        <input type="text" id="claimId" placeholder="e.g. 1RD0089905">
+      </label>
+      <label>Consultant
+        <input type="text" id="consultantName" placeholder="Signing in…" readonly>
+      </label>
+    </div>
+  </div>
+
+  <div class="auth-bar" id="authBar">
+    <span class="authtext"><span class="authdot"></span><span id="authStatusText">Checking sign-in status…</span></span>
+    <button class="ghost" id="signInBtn" type="button" style="display:none;">Sign in with Microsoft</button>
+  </div>
+
+  <main>
+
+    <!-- SECTION A — Per-agent review -->
+    <section class="block" id="sectionAgents">
+      <div class="block-head"><span class="block-index">A</span><h2>Per-Agent Determination Review</h2></div>
+      <p class="block-sub">For each agent's output on this claim, indicate whether you agree with its determination.</p>
+      <div class="agent-grid" id="agentGrid"></div>
+    </section>
+
+    <!-- SECTION B — Override -->
+    <section class="block">
+      <div class="block-head"><span class="block-index">B</span><h2>Final Recommendation</h2></div>
+      <p class="block-sub">Whether the synthesized final recommendation itself needed to be overridden.</p>
+
+      <div class="qrow">
+        <div class="qtext">Override the "Final Recommendation"?</div>
+        <fieldset>
+          <legend class="sr-only">Override the final recommendation</legend>
+          <div class="pillset" data-group="override">
+            <label class="pill yes"><input type="radio" name="override" value="Yes"><span>Yes</span></label>
+            <label class="pill no"><input type="radio" name="override" value="No"><span>No</span></label>
+          </div>
+        </fieldset>
+      </div>
+
+      <div class="reveal" id="revealOverrideReason"><div>
+        <div class="reveal-inner">
+          <div class="subquestion">
+            <label class="field-label">1. Override category</label>
+            <fieldset><legend class="sr-only">Override category</legend>
+              <div class="pillset" data-group="overrideCategory">
+                <label class="pill yes"><input type="radio" name="overrideCategory" value="Coverage interpretation"><span>Coverage interpretation</span></label>
+                <label class="pill yes"><input type="radio" name="overrideCategory" value="Fraud flag disagreement"><span>Fraud flag disagreement</span></label>
+                <label class="pill yes"><input type="radio" name="overrideCategory" value="Valuation"><span>Valuation</span></label>
+                <label class="pill yes"><input type="radio" name="overrideCategory" value="Missing context"><span>Missing context</span></label>
+                <label class="pill yes"><input type="radio" name="overrideCategory" value="Data error"><span>Data error</span></label>
+                <label class="pill yes"><input type="radio" name="overrideCategory" value="Citation misapplied"><span>Citation misapplied</span></label>
+                <label class="pill yes"><input type="radio" name="overrideCategory" value="Business rule misapplied"><span>Business rule misapplied</span></label>
+                <label class="pill yes"><input type="radio" name="overrideCategory" value="Other"><span>Other</span></label>
+              </div>
+            </fieldset>
+          </div>
+          <div class="subquestion" style="margin-bottom:0;">
+            <label class="field-label" for="overrideReason">2. Override reason</label>
+            <textarea id="overrideReason" placeholder="What should the final recommendation have been, and why?"></textarea>
+          </div>
+        </div>
+      </div></div>
+    </section>
+
+    <!-- SECTION C — Escalation -->
+    <section class="block">
+      <div class="block-head"><span class="block-index">C</span><h2>Escalation Review</h2></div>
+      <p class="block-sub">Whether the claim was escalated for human review, and whether that was the right call.</p>
+
+      <div class="qrow">
+        <div class="qtext">Was there an Escalation?</div>
+        <fieldset><legend class="sr-only">Was there an escalation</legend>
+          <div class="pillset" data-group="escalated">
+            <label class="pill yes"><input type="radio" name="escalated" value="Yes"><span>Yes</span></label>
+            <label class="pill no"><input type="radio" name="escalated" value="No"><span>No</span></label>
+          </div>
+        </fieldset>
+      </div>
+
+      <div class="reveal" id="revealEscalation"><div>
+        <div class="reveal-inner calm">
+          <div class="qrow" style="padding-top:0;border-top:none;">
+            <div class="qtext">Do you agree with the Escalation?</div>
+            <fieldset><legend class="sr-only">Agree with the escalation</legend>
+              <div class="pillset" data-group="escalationAgree">
+                <label class="pill no"><input type="radio" name="escalationAgree" value="Yes"><span>Yes</span></label>
+                <label class="pill yes"><input type="radio" name="escalationAgree" value="No"><span>No</span></label>
+              </div>
+            </fieldset>
+          </div>
+          <div class="reveal" id="revealEscalationReason"><div>
+            <label class="field-label" for="escalationReason">Reason</label>
+            <textarea id="escalationReason" placeholder="Why was the escalation not appropriate \u2014 should the agent have decided, or escalated at a different point?"></textarea>
+          </div></div>
+        </div>
+      </div></div>
+    </section>
+
+    <!-- SECTION D — Citations -->
+    <section class="block">
+      <div class="block-head"><span class="block-index">D</span><h2>Citations Review</h2></div>
+      <p class="block-sub">Whether the sources an agent cited actually support the conclusion it drew from them.</p>
+
+      <div class="qrow">
+        <div class="qtext">Citation validity</div>
+        <fieldset><legend class="sr-only">Citation validity</legend>
+          <div class="pillset" data-group="citationValidity">
+            <label class="pill neutral"><input type="radio" name="citationValidity" value="Valid - Supports conclusion"><span>Valid &mdash; Supports conclusion</span></label>
+            <label class="pill yes"><input type="radio" name="citationValidity" value="Invalid - Source doesn't say this"><span>Invalid &mdash; Source doesn&rsquo;t say this</span></label>
+            <label class="pill yes"><input type="radio" name="citationValidity" value="Partially supports — overstated or out of context"><span>Partially supports &mdash; overstated or out of context</span></label>
+            <label class="pill neutral"><input type="radio" name="citationValidity" value="Source not checked"><span>Source not checked</span></label>
+          </div>
+        </fieldset>
+      </div>
+
+      <div class="qrow">
+        <div class="qtext">Unsupported claim present?
+          <span class="hint">Any statement in the agent's reasoning not traceable to a cited source, even if the citation list itself is technically accurate.</span>
+        </div>
+        <fieldset><legend class="sr-only">Unsupported claim present</legend>
+          <div class="pillset" data-group="unsupportedClaim">
+            <label class="pill yes"><input type="radio" name="unsupportedClaim" value="Yes"><span>Yes</span></label>
+            <label class="pill no"><input type="radio" name="unsupportedClaim" value="No"><span>No</span></label>
+          </div>
+        </fieldset>
+      </div>
+    </section>
+
+
+    <!-- SECTION E — Data quality -->
+    <section class="block">
+      <div class="block-head"><span class="block-index">E</span><h2>Data Quality</h2></div>
+      <p class="block-sub">Whether an underlying data issue affected any of the agent recommendations.</p>
+
+      <div class="qrow">
+        <div class="qtext">Was there an issue with Data in any of the recommendation?</div>
+        <fieldset><legend class="sr-only">Was there a data issue</legend>
+          <div class="pillset" data-group="dataIssue">
+            <label class="pill yes"><input type="radio" name="dataIssue" value="Yes"><span>Yes</span></label>
+            <label class="pill no"><input type="radio" name="dataIssue" value="No"><span>No</span></label>
+          </div>
+        </fieldset>
+      </div>
+
+      <div class="reveal" id="revealDataIssue"><div>
+        <div class="reveal-inner">
+
+          <div class="subquestion">
+            <label class="field-label">1. How was the Quality of Data?</label>
+            <fieldset><legend class="sr-only">Data quality</legend>
+              <div class="pillset" data-group="dataQuality">
+                <label class="pill neutral"><input type="radio" name="dataQuality" value="Complete & Accurate"><span>Complete &amp; Accurate</span></label>
+                <label class="pill yes"><input type="radio" name="dataQuality" value="Missing Data"><span>Missing Data</span></label>
+                <label class="pill yes"><input type="radio" name="dataQuality" value="Inaccurate Data"><span>Inaccurate Data</span></label>
+              </div>
+            </fieldset>
+          </div>
+
+          <div class="subquestion">
+            <label class="field-label">2. What is the impact of the Data error?</label>
+            <fieldset><legend class="sr-only">Data error impact</legend>
+              <div class="pillset" data-group="dataImpact">
+                <label class="pill neutral"><input type="radio" name="dataImpact" value="Cosmetic"><span>Cosmetic</span></label>
+                <label class="pill yes"><input type="radio" name="dataImpact" value="Would have changed the outcome."><span>Would have changed the outcome</span></label>
+                <label class="pill yes"><input type="radio" name="dataImpact" value="Would have changed the claim amount."><span>Would have changed the claim amount</span></label>
+              </div>
+            </fieldset>
+          </div>
+
+          <div class="subquestion" style="margin-bottom:0;">
+            <label class="field-label" for="dataErrorExplain">3. Explain the Data Error</label>
+            <textarea id="dataErrorExplain" placeholder="Which field, what was wrong, and where it came from."></textarea>
+          </div>
+
+        </div>
+      </div></div>
+    </section>
+
+    <div class="submit-bar">
+      <p>Sign in above, then submit — your review is written directly to the SharePoint feedback list.</p>
+      <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;">
+        <span id="submitError" style="display:none;color:var(--red);font-size:12.5px;max-width:34ch;"></span>
+        <button class="primary" id="submitBtn" type="button" disabled>Submit review</button>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- SUMMARY RAIL (signature element) -->
+  <aside class="summary-rail">
+    <div class="summary-card">
+      <span class="eyebrow">Agent coverage</span>
+      <div class="progress-num" id="agentProgressNum">0<span>/7</span></div>
+      <div class="progress-label">agents reviewed</div>
+      <div class="progress-track"><div class="progress-fill" id="agentProgressFill"></div></div>
+    </div>
+
+    <div class="status-card">
+      <h3>Capture status</h3>
+      <ul class="status-list" id="statusList">
+        <li><span class="k">Override</span><span class="v pending" id="stOverride">Not answered</span></li>
+        <li><span class="k">Escalation</span><span class="v pending" id="stEscalation">Not answered</span></li>
+        <li><span class="k">Citations</span><span class="v pending" id="stCitations">Not answered</span></li>
+        <li><span class="k">Data quality</span><span class="v pending" id="stData">Not answered</span></li>
+      </ul>
+      <div class="note-card" style="margin-top:16px;">
+        Amber = flagged for follow-up. Teal = clear. This panel updates as you complete the form &mdash; it isn&rsquo;t submitted separately.
+      </div>
+    </div>
+  </aside>
+
+</div>
+
+<!-- Confirmation modal -->
+<div class="confirm-overlay" id="confirmOverlay">
+  <div class="confirm-modal">
+    <h2>Review submitted</h2>
+    <p>This has been written to the SharePoint feedback list.</p>
+    <pre id="confirmJson"></pre>
+    <div class="confirm-actions">
+      <button class="ghost" id="closeConfirm" type="button">Close</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+  // =============================================
+  // CONFIG — fill these in for your tenant/site. See SETUP_GUIDE.md.
+  // =============================================
+  const CONFIG = {
+    msal: {
+      clientId: "16a3d28b-fca7-4f58-b0ea-ee9fccd5acc7",
+      authority: "https://login.microsoftonline.com/5f67b35e-40db-4918-bc89-952d9a7015bc",
+      redirectUri: window.location.origin + window.location.pathname
+    },
+    graph: {
+      // Least-privilege alternative: ["Sites.Selected"] — see SETUP_GUIDE.md.
+      scopes: ["Sites.ReadWrite.All"],
+      siteId: "simplyaicomau.sharepoint.com,263e95fd-c885-4461-be3e-63bf74a3e680,06805f38-edcb-431a-997c-3df5b797151a",
+      listId: "1ea7ee14-3dd5-4a59-8c32-d4940c91c601"
+    }
+  };
+
+  const AGENTS = ["Coverage Agent","Claim Amount Agent","Fraud Agent","Recovery Agent","Weather Agent","Triage Agent","Strategy Agent"];
+  const grid = document.getElementById("agentGrid");
+  AGENTS.forEach((name,i)=>{
+    const key = "agent_"+i;
+    const row = document.createElement("div");
+    row.className = "agent-row";
+    row.dataset.group = key;
+    row.innerHTML = `
+      <div class="agent-name">${name}</div>
+      <fieldset><legend class="sr-only">${name} determination</legend>
+        <div class="pillset" data-group="${key}">
+          <label class="pill agree"><input type="radio" name="${key}" value="Agree"><span>Agree</span></label>
+          <label class="pill partial"><input type="radio" name="${key}" value="Partially Agree"><span>Partially Agree</span></label>
+          <label class="pill disagree"><input type="radio" name="${key}" value="Disagree"><span>Disagree</span></label>
+        </div>
+      </fieldset>`;
+    grid.appendChild(row);
+  });
+
+  // =============================================
+  // AUTH — MSAL sign-in + token acquisition
+  // =============================================
+  let msalClient = null;
+  let currentAccount = null;
+  let consultantEmail = null;
+
+  const authBar = document.getElementById("authBar");
+  const authStatusText = document.getElementById("authStatusText");
+  const signInBtn = document.getElementById("signInBtn");
+  const consultantNameInput = document.getElementById("consultantName");
+  const claimIdInput = document.getElementById("claimId");
+  const submitBtn = document.getElementById("submitBtn");
+  const submitError = document.getElementById("submitError");
+
+  function setAuthUI(state, text){
+    authBar.className = "auth-bar" + (state ? " " + state : "");
+    authStatusText.textContent = text;
+  }
+
+  function refreshSubmitEnabled(){
+    submitBtn.disabled = !(currentAccount && claimIdInput.value.trim());
+  }
+  claimIdInput.addEventListener("input", refreshSubmitEnabled);
+
+  function onSignedIn(account){
+    currentAccount = account;
+    msalClient.setActiveAccount(account);
+    consultantEmail = account.username;
+    consultantNameInput.value = account.name || account.username;
+    signInBtn.style.display = "none";
+    setAuthUI("signed-in", `Signed in as ${account.name || account.username}`);
+    refreshSubmitEnabled();
+  }
+
+  async function initAuth(){
+    if(CONFIG.msal.clientId.startsWith("REPLACE_")){
+      setAuthUI("error", "Auth not configured yet — set CONFIG.msal in this file (see SETUP_GUIDE.md).");
+      return;
+    }
+    try{
+      msalClient = new msal.PublicClientApplication({
+        auth: CONFIG.msal,
+        cache: { cacheLocation: "sessionStorage" }
+      });
+      await msalClient.initialize();
+      await msalClient.handleRedirectPromise().catch(()=>null);
+      const accounts = msalClient.getAllAccounts();
+      if(accounts.length){
+        onSignedIn(accounts[0]);
+      } else {
+        setAuthUI("", "Not signed in.");
+        signInBtn.style.display = "inline-block";
+      }
+    } catch(err){
+      setAuthUI("error", "Auth initialisation failed: " + (err && err.message ? err.message : err));
+    }
+  }
+
+  signInBtn.addEventListener("click", async ()=>{
+    try{
+      setAuthUI("", "Signing in…");
+      const result = await msalClient.loginPopup({ scopes: CONFIG.graph.scopes });
+      onSignedIn(result.account);
+    } catch(err){
+      setAuthUI("error", "Sign-in failed: " + (err && err.message ? err.message : err));
+      signInBtn.style.display = "inline-block";
+    }
+  });
+
+  async function getAccessToken(){
+    const request = { scopes: CONFIG.graph.scopes, account: currentAccount };
+    try{
+      const result = await msalClient.acquireTokenSilent(request);
+      return result.accessToken;
+    } catch(err){
+      const result = await msalClient.acquireTokenPopup(request);
+      return result.accessToken;
+    }
+  }
+
+  initAuth();
+
+  // ---------- generic radio-group watcher ----------
+  function onGroupChange(name, cb){
+    document.querySelectorAll(`input[name="${name}"]`).forEach(input=>{
+      input.addEventListener("change", ()=> cb(input.value));
+    });
+  }
+  function getValue(name){
+    const el = document.querySelector(`input[name="${name}"]:checked`);
+    return el ? el.value : null;
+  }
+  function toggleReveal(el, open){
+    el.classList.toggle("open", open);
+  }
+
+  // ---------- agent progress + row highlight ----------
+  function refreshAgentProgress(){
+    let answered = 0;
+    AGENTS.forEach((_,i)=>{
+      const v = getValue("agent_"+i);
+      const row = document.querySelector(`.agent-row[data-group="agent_${i}"]`);
+      row.dataset.answered = v ? "true" : "false";
+      if(v) answered++;
+    });
+    document.getElementById("agentProgressNum").innerHTML = answered + '<span>/7</span>';
+    document.getElementById("agentProgressFill").style.width = (answered/7*100) + "%";
+  }
+  AGENTS.forEach((_,i)=> onGroupChange("agent_"+i, refreshAgentProgress));
+  refreshAgentProgress();
+
+  // ---------- B: Override ----------
+  const revealOverrideReason = document.getElementById("revealOverrideReason");
+  onGroupChange("override", v=>{
+    toggleReveal(revealOverrideReason, v === "Yes");
+    const st = document.getElementById("stOverride");
+    st.textContent = v === "Yes" ? "Overridden" : "No override";
+    st.className = "v " + (v === "Yes" ? "flag" : "ok");
+  });
+
+  // ---------- C: Escalation ----------
+  const revealEscalation = document.getElementById("revealEscalation");
+  const revealEscalationReason = document.getElementById("revealEscalationReason");
+  onGroupChange("escalated", v=>{
+    toggleReveal(revealEscalation, v === "Yes");
+    if(v !== "Yes"){ toggleReveal(revealEscalationReason, false); document.querySelectorAll('input[name="escalationAgree"]').forEach(i=>i.checked=false); }
+    updateEscalationStatus();
+  });
+  onGroupChange("escalationAgree", v=>{
+    toggleReveal(revealEscalationReason, v === "No");
+    updateEscalationStatus();
+  });
+  function updateEscalationStatus(){
+    const happened = getValue("escalated");
+    const agree = getValue("escalationAgree");
+    const st = document.getElementById("stEscalation");
+    if(happened !== "Yes"){ st.textContent = "None on this claim"; st.className = "v pending"; }
+    else if(!agree){ st.textContent = "Escalated \u2014 pending"; st.className = "v flag"; }
+    else if(agree === "Yes"){ st.textContent = "Escalated \u2014 agreed"; st.className = "v ok"; }
+    else { st.textContent = "Escalated \u2014 disputed"; st.className = "v flag"; }
+  }
+
+  // ---------- D: Citations ----------
+  onGroupChange("citationValidity", updateCitationStatus);
+  onGroupChange("unsupportedClaim", updateCitationStatus);
+  function updateCitationStatus(){
+    const validity = getValue("citationValidity");
+    const unsupported = getValue("unsupportedClaim");
+    const st = document.getElementById("stCitations");
+    if(!validity && !unsupported){ st.textContent = "Not answered"; st.className = "v pending"; return; }
+    const flagged = (validity && validity !== "Valid - Supports conclusion" && validity !== "Source not checked") || unsupported === "Yes";
+    st.textContent = flagged ? "Issue flagged" : "Clean";
+    st.className = "v " + (flagged ? "flag" : "ok");
+  }
+
+  // ---------- E: Data quality ----------
+  const revealDataIssue = document.getElementById("revealDataIssue");
+  onGroupChange("dataIssue", v=>{
+    toggleReveal(revealDataIssue, v === "Yes");
+    const st = document.getElementById("stData");
+    st.textContent = v === "Yes" ? "Issue flagged" : "No issue";
+    st.className = "v " + (v === "Yes" ? "flag" : "ok");
+  });
+
+  // ---------- submit ----------
+  async function submitToSharePoint(data){
+    if(CONFIG.graph.siteId.startsWith("REPLACE_") || CONFIG.graph.listId.startsWith("REPLACE_")){
+      throw new Error("SharePoint list not configured yet — set CONFIG.graph.siteId and listId in this file (see SETUP_GUIDE.md).");
+    }
+    const token = await getAccessToken();
+    const item = { fields: {
+      Title: data.claimId || "Untitled claim",
+      ClaimId: data.claimId,
+      ConsultantName: data.consultant,
+      ConsultantEmail: data.consultantEmail,
+      SubmittedAt: data.submittedAt,
+      Agent_Coverage: data.agentReviews["Coverage Agent"],
+      Agent_ClaimAmount: data.agentReviews["Claim Amount Agent"],
+      Agent_Fraud: data.agentReviews["Fraud Agent"],
+      Agent_Recovery: data.agentReviews["Recovery Agent"],
+      Agent_Weather: data.agentReviews["Weather Agent"],
+      Agent_Triage: data.agentReviews["Triage Agent"],
+      Agent_Strategy: data.agentReviews["Strategy Agent"],
+      OverrideOccurred: data.override.overridden,
+      OverrideCategory: data.override.category,
+      OverrideReason: data.override.reason,
+      EscalationOccurred: data.escalation.occurred,
+      EscalationAgree: data.escalation.agree,
+      EscalationReason: data.escalation.reason,
+      CitationValidity: data.citations.validity,
+      UnsupportedClaim: data.citations.unsupportedClaim,
+      DataIssue: data.dataQuality.issue,
+      DataQualityRating: data.dataQuality.quality,
+      DataImpact: data.dataQuality.impact,
+      DataErrorExplain: data.dataQuality.explanation
+    }};
+    const res = await fetch(`https://graph.microsoft.com/v1.0/sites/${CONFIG.graph.siteId}/lists/${CONFIG.graph.listId}/items`, {
+      method: "POST",
+      headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
+      body: JSON.stringify(item)
+    });
+    if(!res.ok){
+      const text = await res.text().catch(()=>"");
+      throw new Error(`SharePoint rejected the submission (HTTP ${res.status}). ${text}`);
+    }
+    return res.json();
+  }
+
+  submitBtn.addEventListener("click", async ()=>{
+    if(submitBtn.disabled) return;
+    const data = {
+      claimId: claimIdInput.value || null,
+      consultant: consultantNameInput.value || null,
+      consultantEmail: consultantEmail,
+      agentReviews: Object.fromEntries(AGENTS.map((name,i)=>[name, getValue("agent_"+i)])),
+      override: {
+        overridden: getValue("override"),
+        category: getValue("overrideCategory"),
+        reason: document.getElementById("overrideReason").value || null
+      },
+      escalation: {
+        occurred: getValue("escalated"),
+        agree: getValue("escalationAgree"),
+        reason: document.getElementById("escalationReason").value || null
+      },
+      citations: {
+        validity: getValue("citationValidity"),
+        unsupportedClaim: getValue("unsupportedClaim")
+      },
+      dataQuality: {
+        issue: getValue("dataIssue"),
+        quality: getValue("dataQuality"),
+        impact: getValue("dataImpact"),
+        explanation: document.getElementById("dataErrorExplain").value || null
+      },
+      submittedAt: new Date().toISOString()
+    };
+
+    submitBtn.disabled = true;
+    submitBtn.textContent = "Submitting…";
+    submitError.style.display = "none";
+    try{
+      await submitToSharePoint(data);
+      document.getElementById("confirmJson").textContent = JSON.stringify(data, null, 2);
+      document.getElementById("confirmOverlay").classList.add("open");
+    } catch(err){
+      submitError.textContent = err && err.message ? err.message : String(err);
+      submitError.style.display = "inline";
+    } finally {
+      submitBtn.textContent = "Submit review";
+      refreshSubmitEnabled();
+    }
+  });
+  document.getElementById("closeConfirm").addEventListener("click", ()=>{
+    document.getElementById("confirmOverlay").classList.remove("open");
+  });
+  document.getElementById("confirmOverlay").addEventListener("click", e=>{
+    if(e.target.id === "confirmOverlay") e.currentTarget.classList.remove("open");
+  });
+})();
+</script>
+
+</body>
+</html>
