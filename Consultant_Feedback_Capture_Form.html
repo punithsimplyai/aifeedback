@@ -346,6 +346,12 @@
       <label>Claim ID
         <input type="text" id="claimId" placeholder="e.g. 1RD0089905">
       </label>
+      <label>Loss Code
+        <input type="number" id="lossCode" placeholder="e.g. 4021">
+      </label>
+      <label>Run ID
+        <input type="text" id="runId" placeholder="e.g. RUN-2026-0819">
+      </label>
       <label>Consultant
         <input type="text" id="consultantName" placeholder="Signing in…" readonly>
       </label>
@@ -581,7 +587,7 @@
     },
     graph: {
       // Least-privilege alternative: ["Sites.Selected"] — see SETUP_GUIDE.md.
-      scopes: ["Sites.ReadWrite.All"],
+      scopes: ["Sites.Selected"],
       siteId: "simplyaicomau.sharepoint.com,263e95fd-c885-4461-be3e-63bf74a3e680,06805f38-edcb-431a-997c-3df5b797151a",
       listId: "1ea7ee14-3dd5-4a59-8c32-d4940c91c601"
     }
@@ -618,6 +624,8 @@
   const signInBtn = document.getElementById("signInBtn");
   const consultantNameInput = document.getElementById("consultantName");
   const claimIdInput = document.getElementById("claimId");
+  const lossCodeInput = document.getElementById("lossCode");
+  const runIdInput = document.getElementById("runId");
   const submitBtn = document.getElementById("submitBtn");
   const submitError = document.getElementById("submitError");
 
@@ -780,6 +788,8 @@
     const item = { fields: {
       Title: data.claimId || "Untitled claim",
       ClaimId: data.claimId,
+      LossCode: data.lossCode,
+      RunId: data.runId,
       ConsultantName: data.consultant,
       ConsultantEmail: data.consultantEmail,
       SubmittedAt: data.submittedAt,
@@ -819,6 +829,8 @@
     if(submitBtn.disabled) return;
     const data = {
       claimId: claimIdInput.value || null,
+      lossCode: lossCodeInput.value ? Number(lossCodeInput.value) : null,
+      runId: runIdInput.value || null,
       consultant: consultantNameInput.value || null,
       consultantEmail: consultantEmail,
       agentReviews: Object.fromEntries(AGENTS.map((name,i)=>[name, getValue("agent_"+i)])),
