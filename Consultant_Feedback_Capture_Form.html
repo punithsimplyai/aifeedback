@@ -820,7 +820,7 @@
     });
     if(!res.ok){
       const text = await res.text().catch(()=>"");
-      throw new Error(`SharePoint rejected the submission (HTTP ${res.status}). ${text}`);
+      throw new Error(`SharePoint (${https://graph.microsoft.com/v1.0/sites/${CONFIG.graph.siteId}/lists/${CONFIG.graph.listId}/items}) rejected the submission (HTTP ${res.status}). ${text} - Input - ${JSON.stringify(item)}`);
     }
     return res.json();
   }
