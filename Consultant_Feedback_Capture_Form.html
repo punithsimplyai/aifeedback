@@ -780,6 +780,10 @@
   });
 
   // ---------- submit ----------
+    // SharePoint "Yes/No" columns store a real boolean via Graph, not the string "Yes"/"No".
+  function yesNoToBool(v){
+    return v === "Yes" ? true : v === "No" ? false : null;
+  }
   async function submitToSharePoint(data){
     if(CONFIG.graph.siteId.startsWith("REPLACE_") || CONFIG.graph.listId.startsWith("REPLACE_")){
       throw new Error("SharePoint list not configured yet — set CONFIG.graph.siteId and listId in this file (see SETUP_GUIDE.md).");
@@ -800,15 +804,15 @@
       Agent_Weather: data.agentReviews["Weather Agent"],
       Agent_Triage: data.agentReviews["Triage Agent"],
       Agent_Strategy: data.agentReviews["Strategy Agent"],
-      OverrideOccurred: data.override.overridden,
+      OverrideOccurred: yesNoToBool(data.override.overridden),
       OverrideCategory: data.override.category,
       OverrideReason: data.override.reason,
-      EscalationOccurred: data.escalation.occurred,
-      EscalationAgree: data.escalation.agree,
+      EscalationOccurred: yesNoToBool(data.escalation.occurred),
+      EscalationAgree: yesNoToBool(data.escalation.agree),
       EscalationReason: data.escalation.reason,
       CitationValidity: data.citations.validity,
-      UnsupportedClaim: data.citations.unsupportedClaim,
-      DataIssue: data.dataQuality.issue,
+      UnsupportedClaim: yesNoToBool(data.citations.unsupportedClaim),
+      DataIssue: yesNoToBool(data.dataQuality.issue),
       DataQualityRating: data.dataQuality.quality,
       DataImpact: data.dataQuality.impact,
       DataErrorExplain: data.dataQuality.explanation
